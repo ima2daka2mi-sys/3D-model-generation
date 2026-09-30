@@ -1,6 +1,7 @@
 // Procedural canvas textures for the VDWC gallery.
 // Everything is generated at runtime so the project has no binary assets.
 import * as THREE from 'three';
+import { Q } from './quality.js';
 
 export function rng(seed) {
   let s = seed >>> 0 || 1;
@@ -174,7 +175,8 @@ export function drawCityScene(ctx, w, h, seed, variant = 0) {
 
 export function panoramaTexture(seed = 3) {
   const W = 4096, H = 1024;
-  const [c, ctx] = canvas(W, H);
+  const [c, ctx] = canvas(W * Q.panoScale, H * Q.panoScale);
+  ctx.scale(Q.panoScale, Q.panoScale);
   const r = rng(seed);
   ctx.clearRect(0, 0, W, H);
   const horizon = H * 0.9;
@@ -265,7 +267,8 @@ function button(ctx, x, y, w, h, label) {
 /** 3.0 m x 2.4 m panel -> 1500 x 1200 px */
 export function panelTexture(entry) {
   const W = 1500, H = 1200;
-  const [c, ctx] = canvas(W, H);
+  const [c, ctx] = canvas(Math.round(W * Q.texScale), Math.round(H * Q.texScale));
+  ctx.scale(Q.texScale, Q.texScale);
   ctx.fillStyle = '#fbfbf9';
   ctx.fillRect(0, 0, W, H);
 

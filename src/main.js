@@ -5,11 +5,12 @@ import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { GLTFExporter } from 'three/addons/GLTFExporter.js';
 import { buildHall, polar } from './hall.js';
 import { R, SLOT, SPEC } from './data.js';
+import { Q, TOUCH } from './quality.js';
 
 /* ---------------- renderer / scene ---------------- */
 const container = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Q.pixelRatio);
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -32,7 +33,7 @@ scene.add(new THREE.HemisphereLight(0xeaf4ff, 0xcbbd9f, 1.1));
 const sun = new THREE.DirectionalLight(0xfff3e0, 2.6);
 sun.position.set(-30, 45, -18);
 sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.mapSize.set(Q.shadowMap, Q.shadowMap);
 Object.assign(sun.shadow.camera, { left: -24, right: 24, top: 24, bottom: -24, near: 1, far: 120 });
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.03;
@@ -97,7 +98,8 @@ function setMode(m) {
     clampWalk(camera.position);
     orbit.enabled = false;
   } else {
-    walk.unlock();
+    if (walk.isLocked) walk.unlock();
+    touchLook.id = null;
     orbit.enabled = true;
     const dir = camera.getWorldDirection(new THREE.Vector3());
     orbit.target.copy(camera.position).addScaledVector(dir, 6);
@@ -107,8 +109,14 @@ function setMode(m) {
 $('btn-orbit').onclick = () => setMode('orbit');
 $('btn-section').onclick = () => setSection(sectionPlane.constant > 1e5);
 $('btn-walk').onclick = () => {
+  stopTour();
+  hideInfo();
   setMode('walk');
-  walk.lock();
+  if (TOUCH) {
+    $('walk-hint').textContent = '左下のスティックで移動・画面をドラッグで視点';
+    setTimeout(() => ($('walk-hint').hidden = true), 3500);
+  }
+  else walk.lock();
 };
 walk.addEventListener('unlock', () => {
   if (mode === 'walk') $('walk-hint').textContent = 'クリックで操作再開 ／ Esc で解除';
@@ -117,8 +125,54 @@ walk.addEventListener('lock', () => {
   $('walk-hint').textContent = 'WASD / 矢印キーで移動・マウスで視点・Shift で速く・Esc で解除';
 });
 renderer.domElement.addEventListener('click', () => {
-  if (mode === 'walk' && !walk.isLocked) walk.lock();
+  if (mode === 'walk' && !TOUCH && !walk.isLocked) walk.lock();
 });
+
+/* ---------------- touch walk: joystick + drag to look ---------------- */
+const joy = { x: 0, y: 0, id: null };
+const touchLook = { id: null, x: 0, y: 0 };
+const lookEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+{
+  const pad = $('joystick'), knob = pad.querySelector('span');
+  const move = (e) => {
+    const r = pad.getBoundingClientRect();
+    const R0 = r.width / 2;
+    let dx = e.clientX - (r.left + R0), dy = e.clientY - (r.top + R0);
+    const d = Math.hypot(dx, dy);
+    if (d > R0) { dx *= R0 / d; dy *= R0 / d; }
+    joy.x = dx / R0;
+    joy.y = dy / R0;
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+  };
+  const end = () => {
+    joy.id = null; joy.x = joy.y = 0;
+    knob.style.transform = '';
+  };
+  pad.addEventListener('pointerdown', (e) => {
+    joy.id = e.pointerId;
+    pad.setPointerCapture(e.pointerId);
+    move(e);
+  });
+  pad.addEventListener('pointermove', (e) => e.pointerId === joy.id && move(e));
+  pad.addEventListener('pointerup', end);
+  pad.addEventListener('pointercancel', end);
+}
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (mode !== 'walk' || !TOUCH) return;
+  Object.assign(touchLook, { id: e.pointerId, x: e.clientX, y: e.clientY });
+});
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (mode !== 'walk' || e.pointerId !== touchLook.id) return;
+  lookEuler.setFromQuaternion(camera.quaternion);
+  lookEuler.y += (e.clientX - touchLook.x) * 0.005;
+  lookEuler.x = THREE.MathUtils.clamp(lookEuler.x + (e.clientY - touchLook.y) * 0.005, -1.3, 1.3);
+  camera.quaternion.setFromEuler(lookEuler);
+  touchLook.x = e.clientX;
+  touchLook.y = e.clientY;
+});
+for (const ev of ['pointerup', 'pointercancel']) {
+  renderer.domElement.addEventListener(ev, (e) => e.pointerId === touchLook.id && (touchLook.id = null));
+}
 
 /** Keep the walker on the gallery floor (out of the pool, planting and objects). */
 function clampWalk(p) {
@@ -385,15 +439,17 @@ function animate() {
   const t = timer.getElapsed();
   for (const f of hall.anim) f(t);
 
-  if (mode === 'walk' && walk.isLocked) {
+  $('joystick').hidden = !(mode === 'walk' && TOUCH);
+  if (mode === 'walk' && (walk.isLocked || TOUCH)) {
     const speed = (keys.ShiftLeft || keys.ShiftRight ? 4.5 : 2.2) * dt;
     camera.getWorldDirection(fwd);
     fwd.y = 0;
     fwd.normalize();
     right.crossVectors(fwd, camera.up).normalize();
     const f = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
-    const s = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
-    camera.position.addScaledVector(fwd, f * speed).addScaledVector(right, s * speed);
+    const s = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + joy.x;
+    const fj = f - joy.y;
+    camera.position.addScaledVector(fwd, fj * speed).addScaledVector(right, s * speed);
     camera.position.y = 1.65;
     clampWalk(camera.position);
   } else if (mode === 'orbit') {
@@ -407,11 +463,19 @@ function animate() {
 }
 renderer.setAnimationLoop(animate);
 
-addEventListener('resize', () => {
+function onResize() {
   camera.aspect = innerWidth / innerHeight;
+  // portrait phones: keep ~60° horizontal view so a whole panel fits on screen
+  camera.fov = camera.aspect < 1
+    ? Math.min(85, THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(30)) / camera.aspect)))
+    : 55;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
-});
+}
+addEventListener('resize', onResize);
+addEventListener('orientationchange', () => setTimeout(onResize, 300));
+window.visualViewport?.addEventListener('resize', onResize);
+onResize();
 
 $('loading').remove();
 window.__vdwc = { scene, camera, flyTo, STOPS, orbit, hall, GLTFExporter };

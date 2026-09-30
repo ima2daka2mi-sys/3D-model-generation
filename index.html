@@ -2,57 +2,138 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>VDWC Virtual Gallery</title>
   <link rel="icon" href="data:," />
   <style>
+    /* Single-look UI over a full-screen 3D canvas. All overlay controls live in
+       one CSS grid (#ui) so each group owns its own cell and can never overlap. */
     :root {
       --navy: #16243f;
       --ink: #1b2a44;
-      --paper: rgba(255, 255, 255, 0.92);
-      --line: rgba(27, 42, 68, 0.15);
+      --paper: rgba(255, 255, 255, 0.94);
+      --line: rgba(27, 42, 68, 0.16);
+      --muted: #5d6b80;
       --gold: #b8955a;
+      --ground: #dfe9f2;
+      --st: env(safe-area-inset-top, 0px);
+      --sb: env(safe-area-inset-bottom, 0px);
+      --sl: env(safe-area-inset-left, 0px);
+      --sr: env(safe-area-inset-right, 0px);
+      --gap: 12px;
+      color-scheme: light;
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #dfe9f2; font-family: "Helvetica Neue", "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; color: var(--ink); }
-    #app, #app canvas { position: fixed; inset: 0; display: block; }
-    .brand { position: fixed; top: 16px; left: 16px; background: linear-gradient(135deg, #16243fee, #1f3a66e6); color: #fff; padding: 14px 18px; border-radius: 10px; max-width: 280px; box-shadow: 0 6px 24px #0003; }
-    .brand h1 { margin: 0; font-size: 34px; letter-spacing: 3px; font-weight: 700; background: linear-gradient(90deg, #fff, #7fc3ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
-    .brand p { margin: 2px 0 0; font-size: 12px; opacity: .9; }
-    .brand .tag { margin-top: 8px; font-size: 12px; line-height: 1.5; opacity: .85; }
-    .toolbar { position: fixed; top: 16px; right: 16px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 330px); }
-    button { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); padding: 7px 12px; border-radius: 999px; cursor: pointer; backdrop-filter: blur(6px); }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ground); color: var(--ink); font-family: "Helvetica Neue", "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+    body { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
+    #app, #app canvas { position: fixed; inset: 0; display: block; touch-action: none; }
+
+    #ui {
+      position: fixed; inset: 0; pointer-events: none;
+      display: grid; gap: var(--gap);
+      padding: calc(16px + var(--st)) calc(16px + var(--sr)) calc(16px + var(--sb)) calc(16px + var(--sl));
+      grid-template-columns: minmax(0, 320px) 1fr auto;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "brand . tools"
+        "side  . map"
+        "stops stops stops";
+    }
+    #ui > *, #side > * { pointer-events: auto; }
+
+    button { font: inherit; font-size: 13px; line-height: 1; border: 1px solid var(--line); background: var(--paper); color: var(--ink); padding: 9px 14px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
     button:hover { border-color: var(--ink); }
+    button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
     button.active { background: var(--navy); color: #fff; border-color: var(--navy); }
-    button:disabled { opacity: .6; cursor: progress; }
-    #stops { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 32px); background: var(--paper); padding: 6px; border-radius: 999px; box-shadow: 0 4px 18px #0002; }
-    #stops button { border: none; background: transparent; min-width: 36px; padding: 6px 10px; }
-    #stops button.active { background: var(--navy); color: #fff; }
-    #minimap { position: fixed; right: 16px; bottom: 76px; width: 180px; height: 180px; border-radius: 50%; box-shadow: 0 4px 18px #0003; background: #fff8; }
-    #info { position: fixed; left: 16px; bottom: 76px; width: 320px; max-width: calc(100% - 32px); background: var(--paper); border-radius: 12px; padding: 16px 18px; box-shadow: 0 6px 24px #0003; backdrop-filter: blur(6px); }
-    #info .no { font-size: 40px; font-weight: 700; line-height: 1; }
+    button:disabled { opacity: .6; cursor: default; }
+
+    .brand { grid-area: brand; align-self: start; justify-self: start; background: linear-gradient(135deg, #16243ff0, #1f3a66eb); color: #fff; padding: 12px 16px; border-radius: 10px; box-shadow: 0 6px 24px #0003; }
+    .brand h1 { margin: 0; font-size: 30px; letter-spacing: 3px; font-weight: 700; background: linear-gradient(90deg, #fff, #7fc3ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .brand p { margin: 2px 0 0; font-size: 12px; opacity: .9; }
+    .brand .tag { margin-top: 6px; font-size: 12px; line-height: 1.5; opacity: .85; }
+    #stats { margin-top: 6px; font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
+
+    .toolbar { grid-area: tools; align-self: start; justify-self: end; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 520px; }
+
+    #minimap { grid-area: map; align-self: end; justify-self: end; width: 160px; height: 160px; border-radius: 50%; box-shadow: 0 4px 18px #0003; background: #ffffff88; }
+
+    #side { grid-area: side; align-self: end; min-height: 0; max-height: 100%; display: flex; flex-direction: column; justify-content: flex-end; gap: var(--gap); pointer-events: none; }
+    #info { position: relative; background: var(--paper); border-radius: 12px; padding: 14px 16px; box-shadow: 0 6px 24px #0003; overflow-y: auto; min-height: 0; }
+    #info .no { font-size: 36px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
     #info .no::after { content: ""; display: block; width: 36px; height: 3px; background: var(--gold); margin-top: 6px; }
-    #info h2 { margin: 10px 0 6px; font-size: 20px; }
+    #info h2 { margin: 10px 0 6px; font-size: 19px; text-wrap: balance; }
     #info dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0 0 8px; font-size: 13px; }
-    #info dt { color: #6b7686; }
+    #info dt { color: var(--muted); }
     #info dd { margin: 0; font-weight: 600; }
     #info p { margin: 0 0 10px; font-size: 13px; line-height: 1.6; color: #4a5566; }
     #info .acts { display: flex; gap: 6px; flex-wrap: wrap; }
-    #info .acts button { font-size: 12px; padding: 5px 10px; }
-    #info-close { position: absolute; top: 8px; right: 8px; border: none; background: none; font-size: 18px; }
-    #walk-hint { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #16243fcc; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; pointer-events: none; }
-    #stats { position: fixed; left: 16px; top: 150px; font-size: 11px; color: #34445f; background: #ffffffaa; padding: 3px 8px; border-radius: 6px; }
-    #loading { position: fixed; inset: 0; display: grid; place-items: center; background: #16243f; color: #fff; font-size: 16px; letter-spacing: 2px; }
+    #info .acts button { font-size: 12px; padding: 7px 10px; }
+    #info-close { position: absolute; top: 6px; right: 6px; border: none; background: none; font-size: 20px; padding: 6px 10px; }
+
+    #joystick { position: relative; flex: none; width: 120px; height: 120px; border-radius: 50%; background: #16243f40; border: 2px solid #ffffffc0; touch-action: none; }
+    #joystick span { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: #ffffffe6; box-shadow: 0 2px 8px #0004; pointer-events: none; }
+
+    #stops { grid-area: stops; justify-self: center; max-width: 100%; display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; background: var(--paper); padding: 6px; border-radius: 22px; box-shadow: 0 4px 18px #0002; }
+    #stops button { border: none; background: transparent; min-width: 40px; padding: 9px 12px; }
+    #stops button.active { background: var(--navy); color: #fff; }
+
+    #walk-hint { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: calc(100% - 32px); text-align: center; background: #16243fcc; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; pointer-events: none; }
+    #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--navy); color: #fff; font-size: 16px; letter-spacing: 2px; }
     [hidden] { display: none !important; }
+
+    /* Phones, portrait: brand + map on top, controls stacked at the bottom. */
     @media (max-width: 720px) {
-      .brand { padding: 10px 12px; max-width: 200px; }
-      .brand h1 { font-size: 24px; }
-      .brand .tag { display: none; }
-      .toolbar { top: auto; bottom: 120px; right: 16px; max-width: 60%; }
-      #minimap { width: 120px; height: 120px; top: 16px; bottom: auto; }
-      #stats { top: 90px; }
-      #info { bottom: 170px; }
+      :root { --gap: 8px; }
+      #ui {
+        padding: calc(12px + var(--st)) calc(12px + var(--sr)) calc(12px + var(--sb)) calc(12px + var(--sl));
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: auto minmax(0, 1fr) auto auto;
+        grid-template-areas:
+          "brand map"
+          "side  side"
+          "tools tools"
+          "stops stops";
+      }
+      .brand { padding: 8px 12px; border-radius: 8px; }
+      .brand h1 { font-size: 22px; letter-spacing: 2px; }
+      .brand p { font-size: 10px; }
+      .brand .tag, #stats { display: none; }
+      #minimap { align-self: start; width: 88px; height: 88px; }
+      .toolbar, #stops { justify-self: stretch; max-width: none; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+      .toolbar::-webkit-scrollbar, #stops::-webkit-scrollbar { display: none; }
+      .toolbar button, #stops button { flex: none; }
+      #stops { border-radius: 14px; }
+      #info { padding: 12px 14px; }
+      #info .no { font-size: 26px; }
+      #info h2 { font-size: 17px; margin: 6px 0 4px; }
+      #info .acts { display: none; }
     }
+    /* Phones, landscape: no brand, card on the left, map on the right. */
+    @media (max-height: 500px) and (orientation: landscape) {
+      :root { --gap: 8px; }
+      #ui {
+        padding: calc(8px + var(--st)) calc(12px + var(--sr)) calc(8px + var(--sb)) calc(12px + var(--sl));
+        grid-template-columns: minmax(0, 300px) 1fr auto;
+        grid-template-rows: minmax(0, 1fr) auto auto;
+        grid-template-areas:
+          "side  . map"
+          "tools tools tools"
+          "stops stops stops";
+      }
+      .brand { display: none; }
+      #minimap { align-self: start; width: 88px; height: 88px; }
+      .toolbar, #stops { justify-self: stretch; max-width: none; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+      .toolbar::-webkit-scrollbar, #stops::-webkit-scrollbar { display: none; }
+      .toolbar button, #stops button { flex: none; }
+      #stops { border-radius: 14px; padding: 4px; }
+      #stops button, .toolbar button { padding: 7px 11px; }
+      #info .acts, #info p { display: none; }
+      #info .no { font-size: 24px; }
+      #info h2 { font-size: 16px; }
+      #joystick { width: 100px; height: 100px; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   </style>
   <script type="importmap">
     { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
@@ -60,44 +141,50 @@
 </head>
 <body>
   <div id="app"></div>
-  <div id="loading">LOADING VDWC GALLERY…</div>
 
-  <div class="brand">
-    <h1>VDWC</h1>
-    <p>Virtual Design World Cup</p>
-    <div class="tag">Design for a Better Future.<br />未来をデザインする。アイデアがここに。</div>
-  </div>
-  <div id="stats"></div>
+  <div id="ui">
+    <header class="brand">
+      <h1>VDWC</h1>
+      <p>Virtual Design World Cup</p>
+      <div class="tag">Design for a Better Future.<br />未来をデザインする。アイデアがここに。</div>
+      <div id="stats"></div>
+    </header>
 
-  <div class="toolbar">
-    <button id="btn-orbit" class="active" title="ドラッグで回転・右ドラッグで移動・ホイールでズーム">見回し</button>
-    <button id="btn-walk" title="一人称でウォークスルー（キーボード＋マウス）">ウォーク</button>
-    <button id="btn-section" title="中央で切断した断面表示">断面</button>
-    <button id="btn-tour">▶ 自動ツアー</button>
-    <button id="btn-shot">スクリーンショット</button>
-    <button id="btn-export">GLB 書き出し</button>
-  </div>
-
-  <nav id="stops"></nav>
-  <canvas id="minimap" width="360" height="360"></canvas>
-
-  <div id="info" hidden>
-    <button id="info-close" aria-label="閉じる">×</button>
-    <div class="no" id="info-no"></div>
-    <h2 id="info-title"></h2>
-    <dl>
-      <dt>チーム</dt><dd id="info-team"></dd>
-      <dt>国・地域</dt><dd id="info-country"></dd>
-    </dl>
-    <p id="info-summary"></p>
-    <div class="acts">
-      <button disabled>▶ PLAY MOVIE</button>
-      <button disabled>VIEW DETAILS</button>
-      <button disabled>3D VIEW</button>
+    <div class="toolbar">
+      <button id="btn-orbit" class="active" title="ドラッグで回転・2本指で移動／ズーム">見回し</button>
+      <button id="btn-walk" title="一人称でウォークスルー">ウォーク</button>
+      <button id="btn-section" title="中央で切断した断面表示">断面</button>
+      <button id="btn-tour">▶ 自動ツアー</button>
+      <button id="btn-shot">スクリーンショット</button>
+      <button id="btn-export">GLB 書き出し</button>
     </div>
+
+    <canvas id="minimap" width="320" height="320" aria-label="平面ミニマップ"></canvas>
+
+    <div id="side">
+      <div id="info" hidden>
+        <button id="info-close" aria-label="閉じる">×</button>
+        <div class="no" id="info-no"></div>
+        <h2 id="info-title"></h2>
+        <dl>
+          <dt>チーム</dt><dd id="info-team"></dd>
+          <dt>国・地域</dt><dd id="info-country"></dd>
+        </dl>
+        <p id="info-summary"></p>
+        <div class="acts">
+          <button disabled>▶ PLAY MOVIE</button>
+          <button disabled>VIEW DETAILS</button>
+          <button disabled>3D VIEW</button>
+        </div>
+      </div>
+      <div id="joystick" hidden aria-label="移動スティック"><span></span></div>
+    </div>
+
+    <nav id="stops" aria-label="視点"></nav>
   </div>
 
   <div id="walk-hint" hidden>クリックで開始 ／ WASD で移動・マウスで視点</div>
+  <div id="loading">LOADING VDWC GALLERY…</div>
 
   <script type="module" src="./src/main.js"></script>
 </body>
