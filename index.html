@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VDWC Virtual Gallery</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root {
+      --navy: #16243f;
+      --ink: #1b2a44;
+      --paper: rgba(255, 255, 255, 0.92);
+      --line: rgba(27, 42, 68, 0.15);
+      --gold: #b8955a;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #dfe9f2; font-family: "Helvetica Neue", "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif; color: var(--ink); }
+    #app, #app canvas { position: fixed; inset: 0; display: block; }
+    .brand { position: fixed; top: 16px; left: 16px; background: linear-gradient(135deg, #16243fee, #1f3a66e6); color: #fff; padding: 14px 18px; border-radius: 10px; max-width: 280px; box-shadow: 0 6px 24px #0003; }
+    .brand h1 { margin: 0; font-size: 34px; letter-spacing: 3px; font-weight: 700; background: linear-gradient(90deg, #fff, #7fc3ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .brand p { margin: 2px 0 0; font-size: 12px; opacity: .9; }
+    .brand .tag { margin-top: 8px; font-size: 12px; line-height: 1.5; opacity: .85; }
+    .toolbar { position: fixed; top: 16px; right: 16px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(100% - 330px); }
+    button { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); padding: 7px 12px; border-radius: 999px; cursor: pointer; backdrop-filter: blur(6px); }
+    button:hover { border-color: var(--ink); }
+    button.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+    button:disabled { opacity: .6; cursor: progress; }
+    #stops { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 32px); background: var(--paper); padding: 6px; border-radius: 999px; box-shadow: 0 4px 18px #0002; }
+    #stops button { border: none; background: transparent; min-width: 36px; padding: 6px 10px; }
+    #stops button.active { background: var(--navy); color: #fff; }
+    #minimap { position: fixed; right: 16px; bottom: 76px; width: 180px; height: 180px; border-radius: 50%; box-shadow: 0 4px 18px #0003; background: #fff8; }
+    #info { position: fixed; left: 16px; bottom: 76px; width: 320px; max-width: calc(100% - 32px); background: var(--paper); border-radius: 12px; padding: 16px 18px; box-shadow: 0 6px 24px #0003; backdrop-filter: blur(6px); }
+    #info .no { font-size: 40px; font-weight: 700; line-height: 1; }
+    #info .no::after { content: ""; display: block; width: 36px; height: 3px; background: var(--gold); margin-top: 6px; }
+    #info h2 { margin: 10px 0 6px; font-size: 20px; }
+    #info dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0 0 8px; font-size: 13px; }
+    #info dt { color: #6b7686; }
+    #info dd { margin: 0; font-weight: 600; }
+    #info p { margin: 0 0 10px; font-size: 13px; line-height: 1.6; color: #4a5566; }
+    #info .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+    #info .acts button { font-size: 12px; padding: 5px 10px; }
+    #info-close { position: absolute; top: 8px; right: 8px; border: none; background: none; font-size: 18px; }
+    #walk-hint { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #16243fcc; color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 13px; pointer-events: none; }
+    #stats { position: fixed; left: 16px; top: 150px; font-size: 11px; color: #34445f; background: #ffffffaa; padding: 3px 8px; border-radius: 6px; }
+    #loading { position: fixed; inset: 0; display: grid; place-items: center; background: #16243f; color: #fff; font-size: 16px; letter-spacing: 2px; }
+    [hidden] { display: none !important; }
+    @media (max-width: 720px) {
+      .brand { padding: 10px 12px; max-width: 200px; }
+      .brand h1 { font-size: 24px; }
+      .brand .tag { display: none; }
+      .toolbar { top: auto; bottom: 120px; right: 16px; max-width: 60%; }
+      #minimap { width: 120px; height: 120px; top: 16px; bottom: auto; }
+      #stats { top: 90px; }
+      #info { bottom: 170px; }
+    }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="loading">LOADING VDWC GALLERY…</div>
+
+  <div class="brand">
+    <h1>VDWC</h1>
+    <p>Virtual Design World Cup</p>
+    <div class="tag">Design for a Better Future.<br />未来をデザインする。アイデアがここに。</div>
+  </div>
+  <div id="stats"></div>
+
+  <div class="toolbar">
+    <button id="btn-orbit" class="active" title="ドラッグで回転・右ドラッグで移動・ホイールでズーム">見回し</button>
+    <button id="btn-walk" title="一人称でウォークスルー（キーボード＋マウス）">ウォーク</button>
+    <button id="btn-section" title="中央で切断した断面表示">断面</button>
+    <button id="btn-tour">▶ 自動ツアー</button>
+    <button id="btn-shot">スクリーンショット</button>
+    <button id="btn-export">GLB 書き出し</button>
+  </div>
+
+  <nav id="stops"></nav>
+  <canvas id="minimap" width="360" height="360"></canvas>
+
+  <div id="info" hidden>
+    <button id="info-close" aria-label="閉じる">×</button>
+    <div class="no" id="info-no"></div>
+    <h2 id="info-title"></h2>
+    <dl>
+      <dt>チーム</dt><dd id="info-team"></dd>
+      <dt>国・地域</dt><dd id="info-country"></dd>
+    </dl>
+    <p id="info-summary"></p>
+    <div class="acts">
+      <button disabled>▶ PLAY MOVIE</button>
+      <button disabled>VIEW DETAILS</button>
+      <button disabled>3D VIEW</button>
+    </div>
+  </div>
+
+  <div id="walk-hint" hidden>クリックで開始 ／ WASD で移動・マウスで視点</div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
