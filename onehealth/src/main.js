@@ -407,7 +407,8 @@ function openAvatar() {
     <div class="actions"><button class="primary" data-act="close">決定</button></div>`, '#1d4f7a', 'side');
   cam.mode = 'third';
   $('btn-view').textContent = '視点：三人称';
-  cam.yaw = player.yaw + Math.PI;
+  cam.yaw = player.yaw; // view the avatar from the front
+  cam.pitch = 0.25;
   cam.dist = 4;
 }
 dlg.addEventListener('click', (e) => {
