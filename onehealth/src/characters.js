@@ -198,7 +198,8 @@ export function avatar(look = DEFAULT_LOOK) {
   /* neck & head (big, round, child-like proportions) */
   rig.add(place(part(new THREE.CylinderGeometry(0.038, 0.042, 0.07, 14), skinMat), 0, SH + 0.07, 0));
   const head = new THREE.Group();
-  head.position.set(0, SH + 0.1, 0.005);
+  head.position.set(0, SH + 0.09, 0.005);
+  head.scale.setScalar(0.85); // slightly smaller face, more natural proportions
   const R = 0.155;
   const skull = part(new THREE.SphereGeometry(R, 32, 24), skinMat);
   skull.scale.set(1, 1.02, 0.98);
@@ -418,4 +419,113 @@ export function animateDog(d, t, moving, phase = t * 8) {
   head.rotation.x = k ? Math.sin(phase * 2) * 0.04 : Math.sin(t * 0.8) * 0.05;
   head.rotation.y = k ? 0 : Math.sin(t * 0.45) * 0.35;
   tail.rotation.z = Math.sin(t * (moving ? 12 : 7)) * 0.35;
+}
+
+/* ------------------------------------------------------------------ */
+/* Cat & fox (cute, big-headed)                                         */
+/* ------------------------------------------------------------------ */
+
+/** Big shiny eye: iris + pupil (slit for cats) + highlights. */
+function eye(r, iris, slit = false) {
+  const g = new THREE.Group();
+  g.add(place(sphere(r, iris, 14, 12, 0.2), 0, 0, 0, 0, 0, 0, [1, 1.1, 0.6]));
+  g.add(place(sphere(r * 0.62, 0x120c0a, 12, 10, 0.15), 0, 0, r * 0.32, 0, 0, 0, slit ? [0.38, 1.2, 0.5] : [1, 1.1, 0.5]));
+  g.add(place(sphere(r * 0.3, 0xffffff, 8, 6, 0.1), r * 0.3, r * 0.38, r * 0.5));
+  g.add(place(sphere(r * 0.13, 0xffffff, 6, 4, 0.1), -r * 0.3, -r * 0.35, r * 0.55));
+  return g;
+}
+
+function lum(hex) {
+  const c = new THREE.Color(hex);
+  return 0.3 * c.r + 0.59 * c.g + 0.11 * c.b;
+}
+
+/** Cat, ~0.45 m long, faces +Z. color: coat, belly: chest/paws. */
+export function cat({ color = 0xc08a55, belly = 0xfaf3ea } = {}) {
+  const root = new THREE.Group();
+  const stripe = shade(color, 0.62);
+  const tabby = lum(color) > 0.18 && lum(color) < 0.75;
+
+  root.add(place(capsule(0.095, 0.14, color, 0.8), 0, 0.2, -0.02, Math.PI / 2, 0, 0, [1, 0.95, 1]));
+  root.add(place(sphere(0.085, belly, 14, 10), 0, 0.18, 0.07, 0, 0, 0, [0.9, 0.9, 1]));
+  if (tabby) for (let i = 0; i < 3; i++) {
+    root.add(place(part(new THREE.TorusGeometry(0.097, 0.012, 6, 16, Math.PI), stripe), 0, 0.2, -0.08 + i * 0.065, 0, Math.PI / 2, 0));
+  }
+  // legs with white paws
+  for (const [x, z] of [[-0.05, 0.08], [0.05, 0.08], [-0.055, -0.1], [0.055, -0.1]]) {
+    root.add(place(capsule(0.03, 0.08, color), x, 0.1, z));
+    root.add(place(sphere(0.034, belly, 10, 8), x, 0.03, z + 0.012, 0, 0, 0, [1, 0.6, 1.25]));
+  }
+  // head
+  const head = new THREE.Group();
+  head.position.set(0, 0.34, 0.14);
+  head.add(place(sphere(0.115, color, 22, 18), 0, 0, 0, 0, 0, 0, [1.12, 0.96, 1]));
+  for (const s of [-1, 1]) head.add(place(sphere(0.05, belly, 12, 10), s * 0.035, -0.045, 0.075, 0, 0, 0, [1, 0.8, 0.9])); // muzzle puffs
+  head.add(place(sphere(0.016, 0xf08a9a, 10, 8, 0.3), 0, -0.02, 0.112, 0, 0, 0, [1.2, 0.8, 1])); // nose
+  // ω mouth
+  for (const s of [-1, 1]) head.add(place(part(new THREE.TorusGeometry(0.012, 0.0035, 6, 10, Math.PI), 0x6b3a32), s * 0.012, -0.045, 0.118, 0, 0, Math.PI));
+  for (const s of [-1, 1]) {
+    head.add(place(eye(0.034, 0x9ccf5a, true), s * 0.055, 0.02, 0.085, 0, s * 0.25, 0));
+    // ears with pink inside
+    const ear = new THREE.Group();
+    ear.add(part(new THREE.ConeGeometry(0.052, 0.085, 14), color, 0.7));
+    ear.add(place(part(new THREE.ConeGeometry(0.032, 0.06, 12), 0xf6b8c0, 0.6), 0, -0.008, 0.02, 0, 0, 0, [1, 1, 0.5]));
+    head.add(place(ear, s * 0.068, 0.09, -0.005, 0.1, 0, -s * 0.32));
+    // whiskers
+    for (const k of [-1, 1]) {
+      head.add(place(part(new THREE.CylinderGeometry(0.0015, 0.0015, 0.09, 4), 0xffffff, 0.4), s * 0.085, -0.03 + k * 0.012, 0.09, 0, 0, Math.PI / 2 + s * k * 0.15));
+    }
+  }
+  if (tabby) for (let i = -1; i <= 1; i++) head.add(place(part(new THREE.BoxGeometry(0.008, 0.035, 0.01), stripe), i * 0.022, 0.07, 0.092, -0.5, 0, i * 0.2));
+  root.add(head);
+  // tail: soft S-curve, pivot at the base
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.22, -0.15);
+  tail.add(tube([[0, 0, 0], [0, 0.06, -0.08], [0, 0.17, -0.1], [0, 0.25, -0.05]], 0.022, color));
+  tail.add(place(sphere(0.024, tabby ? stripe : color, 8, 6), 0, 0.25, -0.05));
+  root.add(tail);
+  root.userData = { head, tail };
+  return root;
+}
+
+/** Red fox, ~0.7 m long, faces +Z. thin: starving variant. */
+export function fox({ thin = false } = {}) {
+  const orange = 0xe2722e, white = 0xfbf4ea, dark = 0x2e221c;
+  const root = new THREE.Group();
+  const bw = thin ? 0.72 : 1;
+  root.add(place(capsule(0.12, 0.28, orange, 0.8), 0, 0.38, -0.02, Math.PI / 2, 0, 0, [bw, thin ? 0.85 : 1, 1]));
+  root.add(place(sphere(0.1, white, 14, 10), 0, 0.36, 0.15, 0, 0, 0, [0.9 * bw, 1.05, 1.1]));
+  for (const [x, z] of [[-0.065, 0.13], [0.065, 0.13], [-0.07, -0.17], [0.07, -0.17]]) {
+    root.add(place(capsule(0.035, 0.12, orange), x * bw, 0.27, z));
+    root.add(place(capsule(0.03, 0.12, dark), x * bw, 0.1, z)); // black "stockings"
+    root.add(place(sphere(0.034, dark, 10, 8), x * bw, 0.025, z + 0.015, 0, 0, 0, [1, 0.6, 1.3]));
+  }
+  // head
+  const head = new THREE.Group();
+  head.position.set(0, 0.56, 0.27);
+  head.add(place(sphere(0.115, orange, 22, 18), 0, 0, 0, 0, 0, 0, [1.12, 0.95, 1]));
+  for (const s of [-1, 1]) head.add(place(sphere(0.06, white, 12, 10), s * 0.07, -0.05, 0.03, 0, 0, s * 0.4, [1.3, 0.75, 0.9])); // cheek fluff
+  head.add(place(sphere(0.05, white, 16, 12), 0, -0.04, 0.1, 0, 0, 0, [0.95, 0.75, 1.35])); // rounded muzzle
+  head.add(place(sphere(0.04, orange, 14, 10), 0, -0.012, 0.095, 0, 0, 0, [0.85, 0.55, 1.35])); // muzzle bridge
+  head.add(place(sphere(0.018, 0x161010, 10, 8, 0.25), 0, -0.028, 0.163, 0, 0, 0, [1.2, 0.85, 1]));
+  for (const s of [-1, 1]) head.add(place(part(new THREE.TorusGeometry(0.01, 0.003, 6, 10, Math.PI), 0x4a3028), s * 0.01, -0.06, 0.155, 0, 0, Math.PI)); // smile
+  for (const s of [-1, 1]) {
+    head.add(place(eye(0.036, thin ? 0x8a5a2a : 0xc8902a), s * 0.052, 0.022, 0.085, 0, s * 0.3, 0));
+    const ear = new THREE.Group();
+    ear.add(part(new THREE.ConeGeometry(0.06, 0.13, 14), orange, 0.7));
+    ear.add(place(part(new THREE.ConeGeometry(0.038, 0.09, 12), white, 0.7), 0, -0.01, 0.022, 0, 0, 0, [1, 1, 0.45]));
+    ear.add(place(part(new THREE.ConeGeometry(0.018, 0.03, 12), dark, 0.7), 0, 0.052, 0));
+    head.add(place(ear, s * 0.07, 0.11, -0.01, 0.05, 0, -s * 0.28));
+  }
+  if (thin) head.rotation.x = 0.12; // droops a little when hungry
+  root.add(head);
+  // big fluffy tail with a white tip, pivot at the base
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.42, -0.2);
+  // held low and back, like a real fox
+  tail.add(place(capsule(0.085, 0.2, orange, 0.85), 0, -0.1, -0.15, -2.1, 0, 0, [thin ? 0.75 : 1, 1, 1]));
+  tail.add(place(sphere(0.072, white, 12, 10), 0, -0.24, -0.27, 0, 0, 0, [thin ? 0.75 : 1, 1.2, 1]));
+  root.add(tail);
+  root.userData = { head, tail };
+  return root;
 }

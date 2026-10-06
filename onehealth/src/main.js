@@ -767,7 +767,7 @@ function frame() {
   }
 
   // camera
-  const head = player.pos.clone().add(new THREE.Vector3(0, 1.2, 0));
+  const head = player.pos.clone().add(new THREE.Vector3(0, 1.15, 0));
   if (cam.mode === 'third') {
     const off = new THREE.Vector3(
       Math.sin(cam.yaw) * Math.cos(cam.pitch),
@@ -782,7 +782,7 @@ function frame() {
     updateOcclusion(head, camera.position);
   } else {
     for (const [key, e] of hiddenTrees) { e.mesh.setMatrixAt(e.id, e.m); e.mesh.instanceMatrix.needsUpdate = true; hiddenTrees.delete(key); }
-    camera.position.copy(player.pos).add(new THREE.Vector3(0, 1.38, 0));
+    camera.position.copy(player.pos).add(new THREE.Vector3(0, 1.32, 0));
     camera.lookAt(camera.position.clone().add(new THREE.Vector3(Math.sin(cam.yaw) * Math.cos(cam.pitch), Math.sin(cam.pitch), Math.cos(cam.yaw) * Math.cos(cam.pitch))));
   }
   sun.position.copy(player.pos).add(new THREE.Vector3(-25, 45, 18));

@@ -1,7 +1,7 @@
 // Low-poly procedural models in the proposal's illustration style:
 // animals, the customizable avatar, buildings, furniture and props.
 import * as THREE from 'three';
-export { dog, animateDog, avatar, animateAvatar, AVATAR_OPTIONS, DEFAULT_LOOK } from './characters.js';
+export { dog, animateDog, cat, fox, avatar, animateAvatar, AVATAR_OPTIONS, DEFAULT_LOOK } from './characters.js';
 
 const cache = new Map();
 /** Flat-shaded material, cached by colour. */
@@ -39,58 +39,6 @@ function legs(g, color, w, l, h, r = 0.05) {
   for (const [x, z] of [[-w, -l], [w, -l], [-w, l], [w, l]]) {
     g.add(at(cyl(r, r * 0.9, h, color, 5), x, h / 2, z));
   }
-}
-
-/** Tabby cat, ~0.45 m long. Faces +Z. */
-export function cat({ color = 0x8a6a4a, belly = 0xf3ece2 } = {}) {
-  const g = new THREE.Group();
-  const body = ball(0.16, color);
-  body.scale.set(1, 0.85, 1.6);
-  g.add(at(body, 0, 0.24, 0));
-  g.add(at(ball(0.1, belly), 0, 0.2, 0.12));
-  legs(g, belly, 0.08, 0.15, 0.18, 0.035);
-  const head = new THREE.Group();
-  head.add(ball(0.12, color));
-  head.add(at(ball(0.06, belly), 0, -0.04, 0.08));
-  for (const s of [-1, 1]) {
-    head.add(at(cone(0.045, 0.09, color, 4), s * 0.07, 0.11, 0, 0, 0, -s * 0.25));
-    head.add(at(ball(0.018, 0x1d2a1d, 5, 4), s * 0.045, 0.02, 0.105));
-  }
-  head.add(at(ball(0.014, 0xd98c8c, 4, 3), 0, -0.02, 0.125));
-  g.add(at(head, 0, 0.42, 0.2));
-  const tail = cyl(0.025, 0.03, 0.32, color, 5);
-  g.add(at(tail, 0, 0.42, -0.28, -0.5));
-  g.userData.head = head;
-  g.userData.tail = tail;
-  return g;
-}
-
-/** Fox. thin = starving variant. Faces +Z. */
-export function fox({ thin = false } = {}) {
-  const orange = 0xd9682a, white = 0xf7f0e6, dark = 0x3a2a22;
-  const g = new THREE.Group();
-  const body = ball(0.18, orange);
-  body.scale.set(thin ? 0.7 : 1, thin ? 0.75 : 0.9, 1.8);
-  g.add(at(body, 0, 0.42, 0));
-  g.add(at(ball(0.11, white), 0, 0.42, 0.22));
-  legs(g, dark, 0.08, 0.2, 0.34, 0.035);
-  const head = new THREE.Group();
-  head.add(ball(0.13, orange));
-  const snout = cone(0.07, 0.16, white, 5);
-  head.add(at(snout, 0, -0.03, 0.15, Math.PI / 2));
-  head.add(at(ball(0.02, dark, 4, 3), 0, -0.03, 0.23));
-  for (const s of [-1, 1]) {
-    head.add(at(cone(0.06, 0.14, orange, 4), s * 0.08, 0.15, -0.01));
-    head.add(at(ball(0.018, dark, 4, 3), s * 0.055, 0.03, 0.1));
-  }
-  g.add(at(head, 0, 0.62, 0.32));
-  const tail = ball(0.09, orange);
-  tail.scale.set(1, 1, 3);
-  g.add(at(tail, 0, 0.42, -0.42, 0.35));
-  g.add(at(ball(0.06, white, 5, 4), 0, 0.33, -0.66));
-  g.userData.head = head;
-  g.userData.tail = tail;
-  return g;
 }
 
 /** Holstein cow, ~2 m long. Faces +Z. */
