@@ -1,7 +1,7 @@
 // Low-poly procedural models in the proposal's illustration style:
 // animals, the customizable avatar, buildings, furniture and props.
 import * as THREE from 'three';
-export { dog, animateDog, cat, fox, avatar, animateAvatar, AVATAR_OPTIONS, DEFAULT_LOOK } from './characters.js';
+export { dog, animateDog, cat, fox, cow, avatar, animateAvatar, AVATAR_OPTIONS, DEFAULT_LOOK } from './characters.js';
 
 const cache = new Map();
 /** Flat-shaded material, cached by colour. */
@@ -34,34 +34,6 @@ function at(o, x, y, z, rx = 0, ry = 0, rz = 0) {
 /* ------------------------------------------------------------------ */
 /* Animals                                                              */
 /* ------------------------------------------------------------------ */
-
-function legs(g, color, w, l, h, r = 0.05) {
-  for (const [x, z] of [[-w, -l], [w, -l], [-w, l], [w, l]]) {
-    g.add(at(cyl(r, r * 0.9, h, color, 5), x, h / 2, z));
-  }
-}
-
-/** Holstein cow, ~2 m long. Faces +Z. */
-export function cow() {
-  const g = new THREE.Group();
-  g.add(at(box(0.8, 0.7, 1.6, 0xf4f2ee), 0, 0.95, 0));
-  for (const [x, y, z, s] of [[0.41, 1.0, 0.2, 0.35], [-0.41, 0.9, -0.3, 0.4], [-0.41, 1.05, 0.45, 0.3]]) {
-    g.add(at(box(0.02 + (x ? 0 : s), x ? s : 0.02, s, 0x222222), x, y, z));
-  }
-  legs(g, 0xf4f2ee, 0.3, 0.6, 0.6, 0.08);
-  const head = new THREE.Group();
-  head.add(box(0.42, 0.42, 0.5, 0x222222));
-  head.add(at(box(0.36, 0.22, 0.12, 0xe8b4a8), 0, -0.1, 0.28));
-  for (const s of [-1, 1]) {
-    head.add(at(cone(0.04, 0.16, 0xe9e1c8, 4), s * 0.2, 0.26, -0.05, 0, 0, -s * 0.6));
-    head.add(at(box(0.14, 0.06, 0.08, 0x222222), s * 0.27, 0.12, -0.05));
-    head.add(at(ball(0.03, 0xffffff, 4, 3), s * 0.12, 0.06, 0.25));
-  }
-  g.add(at(head, 0, 1.3, 0.95));
-  g.add(at(ball(0.12, 0xe8b4a8, 5, 4), 0, 0.58, -0.4));
-  g.userData.head = head;
-  return g;
-}
 
 /** Spiky germ / virus particle (doc's blue low-poly virus). */
 export function germ(r = 0.15) {

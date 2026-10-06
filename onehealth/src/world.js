@@ -494,7 +494,7 @@ function buildZoneA(Z, W) {
   Z.solid(fenceX[1], -12, 0.15, 4.5);
   Z.floor(-8, -12, 5, 9, 0xb7c97a, 0.015);
   const c = Z.put(M.cow(), -8, -12, Math.PI / 2);
-  W.animals.push((t) => { c.userData.head.rotation.x = Math.sin(t * 0.8) * 0.15; });
+  W.animals.push((t) => { c.userData.head.rotation.x = Math.sin(t * 0.8) * 0.15; c.userData.tail.rotation.z = Math.sin(t * 2.2) * 0.3; });
   Z.mark('A3', -7.4, -12, 2.6);
   // crop field
   for (let x = -21; x <= -17; x += 1) for (let z = -3; z <= 16; z += 1.2) {
