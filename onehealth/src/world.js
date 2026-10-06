@@ -160,6 +160,7 @@ export function buildWorld(scene) {
     [M.fox(), 2.2, 3.8],
     [M.cow(), 2.4, 5.0],
   ];
+  W.animals.push((t) => M.animateDog(statues[1][0], t, false));
   for (const [o, r, a] of statues) {
     o.position.set(Math.sin(a) * r, 0.62, Math.cos(a) * r);
     o.rotation.y = a;
@@ -528,6 +529,7 @@ function buildZoneA(Z, W) {
   river.position.set(9, 0.04, 0);
   Z.g.add(river);
   W.river = { from: Z.toWorld(9, 18), to: Z.toWorld(9, -18) };
+  W.riverMesh = river;
   for (const s of [-1, 1]) Z.floor(9 + s * 1.7, 0, 0.4, 36, 0xa8b4a0, 0.03);
   Z.solid(9, 8.25, 1.5, 9.75); // river north of the bridge (bridge spans z -4.5..-1.5)
   Z.solid(9, -11.25, 1.5, 6.75);
@@ -634,7 +636,7 @@ function buildZoneB(Z, W) {
   Z.put(M.plant(1.2), hx - 5.3, hz - 5.6);
   // sick beagle — B3
   const sick = Z.put(M.dog({ kind: 'beagle', lying: true }), hx - 0.5, hz - 1.4, 0.4);
-  W.animals.push((t) => { sick.userData.head.rotation.x = 0.1 + Math.sin(t * 0.6) * 0.05; });
+  W.animals.push((t) => { M.animateDog(sick, t * 0.7, false); sick.userData.head.rotation.x = 0.25 + Math.sin(t * 0.6) * 0.04; });
   const poop = M.mesh(new THREE.SphereGeometry(0.08, 5, 4), 0x5a3a1a);
   Z.put(poop, hx + 0.6, hz - 0.3, 0, 0.06);
   Z.mark('B3', hx - 0.2, hz - 1, 1.7);
@@ -660,7 +662,9 @@ function buildZoneB(Z, W) {
   Z.mark('B4', hx - 2.5, hz + 4.3, 1.5);
   // healthy shiba by the sofa — B5
   const pet = Z.put(M.dog({ kind: 'shiba' }), hx + 1.8, hz - 3.6, -0.6);
-  W.animals.push((t) => { pet.userData.tail.rotation.z = Math.sin(t * 8) * 0.4; });
+  W.animals.push((t) => M.animateDog(pet, t, false));
+  W.anchors.petShiba = pet;
+  W.anchors.sickBeagle = sick;
   Z.mark('B5', hx + 1.8, hz - 3.6, 1.7);
 
   for (const [x, z] of [[-19, 12], [-19, -14], [19, 12], [19, -14], [-2, -14], [1.5, -14], [14, 10], [-14, 11]]) Z.tree(x, z, 1);
@@ -683,7 +687,7 @@ function buildZoneC(Z, W) {
   Z.put(M.tv(), hx - 5.1, hz - 1, Math.PI / 2);
   Z.solid(hx - 5.1, hz - 1, 0.25, 0.85);
   const lazy = Z.put(M.dog({ kind: 'beagle', lying: true }), hx - 1, hz - 1.6, 0.3);
-  void lazy;
+  W.animals.push((t) => M.animateDog(lazy, t, false));
   Z.put(M.cage(), hx + 4.3, hz - 4.9);
   Z.solid(hx + 4.3, hz - 4.9, 0.55, 0.4);
   // C1 pet food
@@ -740,7 +744,7 @@ function buildZoneC(Z, W) {
   void neighbor;
   Z.mark('C5', gx + 3.5, gz + 4.6, 2.4);
   // C4 lost shiba without ID walking the aisle
-  const lost = Z.put(M.dog({ kind: 'shiba' }), gx, gz, 0);
+  const lost = Z.put(M.dog({ kind: 'shiba', collar: false }), gx, gz, 0); // no ID tag
   const loop = (t) => {
     // rectangular loop along the aisles between the bed blocks
     const pts = [[-8, 6.8], [8.2, 6.8], [8.2, -9], [-8, -9]];
@@ -754,12 +758,12 @@ function buildZoneC(Z, W) {
   };
   W.lostDog = { obj: lost, paused: false, t: 0, home: new THREE.Vector3(gx + 7.2, 0, gz + 9.4), rot: Math.PI }; // zone-local
   W.animals.push((t, dt) => {
+    M.animateDog(lost, t, !W.lostDog.paused && !W.lostDog.home.equals(lost.position), W.lostDog.t * 9);
     if (W.lostDog.paused) return;
     W.lostDog.t += dt;
     const [x, z, ry] = loop(W.lostDog.t);
     lost.position.set(gx + x, 0, gz + z);
     lost.rotation.y = ry;
-    lost.userData.tail.rotation.z = Math.sin(t * 8) * 0.3;
   });
   const lostMark = Z.mark('C4', gx, gz, 1.6, lost);
   void lostMark;

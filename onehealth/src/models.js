@@ -1,6 +1,7 @@
 // Low-poly procedural models in the proposal's illustration style:
 // animals, the customizable avatar, buildings, furniture and props.
 import * as THREE from 'three';
+export { dog, animateDog, avatar, animateAvatar, AVATAR_OPTIONS, DEFAULT_LOOK } from './characters.js';
 
 const cache = new Map();
 /** Flat-shaded material, cached by colour. */
@@ -59,43 +60,6 @@ export function cat({ color = 0x8a6a4a, belly = 0xf3ece2 } = {}) {
   g.add(at(head, 0, 0.42, 0.2));
   const tail = cyl(0.025, 0.03, 0.32, color, 5);
   g.add(at(tail, 0, 0.42, -0.28, -0.5));
-  g.userData.head = head;
-  g.userData.tail = tail;
-  return g;
-}
-
-/** Dog. kind: 'beagle' | 'shiba'. lying = sick pose. Faces +Z. */
-export function dog({ kind = 'beagle', lying = false } = {}) {
-  const main = kind === 'shiba' ? 0xd38b45 : 0xa8642e;
-  const white = 0xf6efe6;
-  const g = new THREE.Group();
-  const inner = new THREE.Group();
-  g.add(inner);
-  const body = ball(0.2, main);
-  body.scale.set(1, 0.85, 1.7);
-  inner.add(at(body, 0, 0.36, 0));
-  inner.add(at(ball(0.14, white), 0, 0.3, 0.16));
-  if (!lying) legs(inner, white, 0.1, 0.2, 0.28, 0.045);
-  else for (const s of [-1, 1]) inner.add(at(cyl(0.045, 0.045, 0.3, white, 5), s * 0.1, 0.06, 0.38, Math.PI / 2));
-  const head = new THREE.Group();
-  head.add(ball(0.14, main));
-  head.add(at(ball(0.08, white), 0, -0.04, 0.11));
-  head.add(at(ball(0.03, 0x222222, 5, 4), 0, -0.02, 0.19));
-  for (const s of [-1, 1]) {
-    head.add(at(ball(0.022, 0x222222, 5, 4), s * 0.055, 0.04, 0.12));
-    if (kind === 'shiba') head.add(at(cone(0.05, 0.1, main, 4), s * 0.08, 0.14, -0.01));
-    else {
-      const ear = ball(0.07, 0x6b3c1c, 5, 4);
-      ear.scale.set(0.4, 1.3, 0.8);
-      head.add(at(ear, s * 0.13, -0.04, -0.01));
-    }
-  }
-  inner.add(at(head, 0, lying ? 0.22 : 0.55, lying ? 0.4 : 0.32));
-  const tail = kind === 'shiba'
-    ? at(mesh(new THREE.TorusGeometry(0.07, 0.03, 4, 8, Math.PI * 1.5), main), 0, 0.55, -0.32, 0, Math.PI / 2)
-    : at(cyl(0.02, 0.035, 0.25, white, 5), 0, 0.5, -0.36, -0.7);
-  inner.add(tail);
-  if (lying) inner.position.y = -0.18;
   g.userData.head = head;
   g.userData.tail = tail;
   return g;
@@ -169,78 +133,6 @@ export function germ(r = 0.15) {
 /* ------------------------------------------------------------------ */
 /* Avatar                                                               */
 /* ------------------------------------------------------------------ */
-
-export const AVATAR_OPTIONS = {
-  skin: ['#f3d2b5', '#e0b08a', '#c18a5f', '#8d5b3b', '#f6e0cf'],
-  hairStyle: ['ショート', 'ボブ', 'ロング', 'おだんご', 'ベリーショート'],
-  hairColor: ['#2b2420', '#5a3b22', '#9a6a3a', '#c9c9c9', '#3b4a7a'],
-  top: ['Tシャツ', 'パーカー', 'シャツ'],
-  topColor: ['#f4f4f4', '#3f6fb5', '#e0a43a', '#4f9a6a', '#c95b6b'],
-  bottom: ['パンツ', 'スカート', 'ハーフパンツ'],
-  bottomColor: ['#2b2f3a', '#6b7a8f', '#9a6a3a', '#38536b', '#7a4f6b'],
-};
-
-export const DEFAULT_LOOK = { skin: 0, hairStyle: 0, hairColor: 0, top: 0, topColor: 1, bottom: 0, bottomColor: 0 };
-
-/** Simple friendly avatar (~1.5 m). Faces +Z. */
-export function avatar(look = DEFAULT_LOOK) {
-  const O = AVATAR_OPTIONS;
-  const skin = O.skin[look.skin], hair = O.hairColor[look.hairColor];
-  const top = O.topColor[look.topColor], bottom = O.bottomColor[look.bottomColor];
-  const g = new THREE.Group();
-  const legsG = new THREE.Group();
-  g.add(legsG);
-  const legL = new THREE.Group(), legR = new THREE.Group();
-  for (const [lg, s] of [[legL, -1], [legR, 1]]) {
-    // pants: full-length legs; skirt / half pants: bare legs + short cuff
-    lg.add(at(cyl(0.07, 0.065, 0.62, look.bottom === 0 ? bottom : skin, 6), 0, -0.31, 0));
-    if (look.bottom === 2) lg.add(at(cyl(0.085, 0.08, 0.3, bottom, 6), 0, -0.15, 0));
-    lg.add(at(box(0.12, 0.08, 0.2, 0x3a3a3a), 0, -0.62, 0.04));
-    lg.position.set(s * 0.09, 0.68, 0);
-    legsG.add(lg);
-  }
-  if (look.bottom === 1) g.add(at(cyl(0.16, 0.3, 0.45, bottom, 8), 0, 0.55, 0));
-  else g.add(at(cyl(0.17, 0.17, 0.16, bottom, 8), 0, 0.72, 0));
-  const torso = cyl(0.17, 0.2, 0.5, top, 8);
-  g.add(at(torso, 0, 0.98, 0));
-  if (look.top === 1) g.add(at(cyl(0.12, 0.14, 0.08, top, 8), 0, 1.24, -0.06)); // hood
-  if (look.top === 2) g.add(at(box(0.16, 0.12, 0.05, 0xffffff), 0, 1.2, 0.17)); // collar
-  const armL = new THREE.Group(), armR = new THREE.Group();
-  for (const [arm, s] of [[armL, -1], [armR, 1]]) {
-    const sleeve = look.top === 0 ? 0.18 : 0.42;
-    arm.add(at(cyl(0.055, 0.05, sleeve, top, 6), 0, -sleeve / 2, 0));
-    if (sleeve < 0.4) arm.add(at(cyl(0.045, 0.042, 0.26, skin, 6), 0, -0.3, 0));
-    arm.add(at(ball(0.05, skin, 6, 4), 0, -0.46, 0));
-    arm.position.set(s * 0.24, 1.2, 0);
-    arm.rotation.z = s * 0.12;
-    g.add(arm);
-  }
-  const head = new THREE.Group();
-  head.add(ball(0.17, skin, 10, 8));
-  for (const s of [-1, 1]) head.add(at(ball(0.022, 0x2a2420, 5, 4), s * 0.06, 0.01, 0.155));
-  head.add(at(box(0.07, 0.015, 0.01, 0xb0605a), 0, -0.07, 0.16));
-  // hair
-  const hairCap = ball(0.18, hair, 10, 6);
-  hairCap.scale.set(1, look.hairStyle === 4 ? 0.7 : 0.85, 1);
-  head.add(at(hairCap, 0, 0.05, -0.02));
-  if (look.hairStyle === 1) head.add(at(cyl(0.19, 0.2, 0.2, hair, 10), 0, -0.04, -0.03));
-  if (look.hairStyle === 2) head.add(at(box(0.34, 0.42, 0.12, hair), 0, -0.14, -0.12));
-  if (look.hairStyle === 3) head.add(at(ball(0.09, hair, 7, 5), 0, 0.2, -0.1));
-  head.position.y = 1.45;
-  g.add(head);
-  g.userData = { legL, legR, armL, armR, head };
-  return g;
-}
-
-/** Walk cycle: phase advances with distance walked. */
-export function animateAvatar(a, phase, moving) {
-  const { legL, legR, armL, armR } = a.userData;
-  const s = moving ? Math.sin(phase) * 0.6 : 0;
-  legL.rotation.x = s;
-  legR.rotation.x = -s;
-  armL.rotation.x = -s * 0.8;
-  armR.rotation.x = s * 0.8;
-}
 
 /* ------------------------------------------------------------------ */
 /* Vegetation                                                           */

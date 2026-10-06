@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { buildWorld, insideAny, pushOut, inside } from './world.js';
 import * as M from './models.js';
 import { ZONES, SCENARIOS, rankFor } from './content.js';
+import { createEffects } from './effects.js';
 
 const $ = (id) => document.getElementById(id);
 const store = {
@@ -27,7 +28,7 @@ $('app').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 600);
 
-scene.add(new THREE.HemisphereLight(0xe8f6ff, 0x7aa860, 1.5));
+scene.add(new THREE.HemisphereLight(0xeef6ff, 0xc8c0a8, 1.45));
 const sun = new THREE.DirectionalLight(0xfff2dc, 2.2);
 sun.castShadow = true;
 sun.shadow.mapSize.set(MOBILE ? 1024 : 2048, MOBILE ? 1024 : 2048);
@@ -37,6 +38,7 @@ sun.shadow.normalBias = 0.04;
 scene.add(sun, sun.target);
 
 const W = buildWorld(scene);
+const fx = createEffects(scene, W, renderer, { mobile: MOBILE });
 
 /* ---------------- player ---------------- */
 let look = { ...M.DEFAULT_LOOK, ...store.get('look', {}) };
@@ -181,15 +183,6 @@ function spawnThinFox() {
     fx.position.y = Math.abs(Math.sin(t * 40)) * 0.05;
   } });
 }
-function spawnSparkle(pos) {
-  for (let i = 0; i < 14; i++) {
-    const s = M.mesh(new THREE.OctahedronGeometry(0.09, 0), 0xffd84a, { emissive: 0x6a5000 });
-    s.position.copy(pos);
-    const v = new THREE.Vector3(Math.cos(i) * 1.5, 1.5 + Math.random(), Math.sin(i) * 1.5);
-    scene.add(s);
-    effects.push({ obj: s, life: 1.4, update(dt) { s.position.addScaledVector(v, dt); v.y -= 4 * dt; s.rotation.y += dt * 6; } });
-  }
-}
 function playEffect(sc, mark) {
   const pos = mark.sprite.position.clone();
   pos.y = 0.3;
@@ -276,7 +269,7 @@ function resolve() {
   delete state.results[sc.id].pending;
   mark.done = true;
   mark.sprite.visible = false;
-  spawnSparkle(mark.sprite.position.clone());
+  fx.celebrate(mark.sprite.position.clone().setY(0));
   sfx.pop();
   if (sc.id === 'C4') {
     // the dog is taken to the pet space and waits for its owner
@@ -362,6 +355,7 @@ function zoneClear(zid) {
   store.set('best', state.best);
   refreshProgress();
   sfx.fanfare();
+  fx.celebrate(player.pos.clone(), true);
   const z = zoneOf(zid);
   const all = ZONES.every((zz) => zoneProgress(zz.id).cleared);
   const nextHint = stamp === 'silver' ? '<p class="small">まちがえた問題があったのでシルバー。次はゴールドを目指そう！</p>' : '<p class="small">全問正解でゴールドスタンプ！</p>';
@@ -716,7 +710,7 @@ function frame() {
   }
   avatar.position.copy(player.pos);
   avatar.rotation.y = player.yaw;
-  M.animateAvatar(avatar, player.phase, player.moving);
+  M.animateAvatar(avatar, player.phase, player.moving, t);
   avatar.visible = cam.mode === 'third';
   if (cam.mode === 'first' && player.moving) cam.yaw = player.yaw;
 
@@ -794,6 +788,7 @@ function frame() {
   sun.position.copy(player.pos).add(new THREE.Vector3(-25, 45, 18));
   sun.target.position.copy(player.pos);
 
+  fx.update(dt, t, player.pos, player.moving && !paused);
   renderer.render(scene, camera);
   drawMinimap();
 }
