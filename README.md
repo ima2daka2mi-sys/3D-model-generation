@@ -1,3 +1,8 @@
+# 3D 空間ビューア集
+
+- **VDWC Virtual Gallery**（このページ）: https://ima2daka2mi-sys.github.io/3D-model-generation/
+- **ワンヘルス・クエスト（仮称）**: https://ima2daka2mi-sys.github.io/3D-model-generation/onehealth/ — 詳細は [onehealth/README.md](onehealth/README.md)
+
 # VDWC Virtual Gallery — 3D ブラウザビューア
 
 「Virtual Design World Cup」審査ギャラリー（仕様パネル左上のメインビジュアル）を three.js で 3D 化し、ブラウザで閲覧できるようにしたものです。

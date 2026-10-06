@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>ワンヘルス・クエスト</title>
+  <link rel="icon" href="data:," />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" />
+  <style>
+    /* Bright single-look game UI over a full-screen 3D world.
+       Overlay groups each own a grid cell (#hud) so nothing overlaps. */
+    :root {
+      --ink: #1d2733;
+      --muted: #4d5b6b;
+      --paper: #fffdf8;
+      --paper-a: rgba(255, 253, 248, 0.95);
+      --line: rgba(29, 39, 51, 0.14);
+      --accent: #1d4f7a;
+      --sun: #ffcf4a;
+      --ok: #1f7a4d;
+      --ng: #b3342b;
+      --ground: #bfe3f7;
+      --font: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+      --st: env(safe-area-inset-top, 0px);
+      --sb: env(safe-area-inset-bottom, 0px);
+      --sl: env(safe-area-inset-left, 0px);
+      --sr: env(safe-area-inset-right, 0px);
+      --gap: 10px;
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ground); color: var(--ink); font-family: var(--font); }
+    body { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; overscroll-behavior: none; }
+    #app, #app canvas { position: fixed; inset: 0; display: block; touch-action: none; }
+
+    button { font: inherit; font-weight: 700; font-size: 14px; line-height: 1.2; color: var(--ink); background: var(--paper-a); border: 2px solid var(--line); border-radius: 999px; padding: 9px 14px; cursor: pointer; white-space: nowrap; }
+    button:hover { border-color: var(--ink); }
+    button:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+    button.primary { background: var(--zone, var(--accent)); color: #fff; border-color: transparent; }
+
+    #hud {
+      position: fixed; inset: 0; pointer-events: none;
+      display: grid; gap: var(--gap);
+      padding: calc(12px + var(--st)) calc(12px + var(--sr)) calc(12px + var(--sb)) calc(12px + var(--sl));
+      grid-template-columns: minmax(0, 340px) 1fr auto;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "place . tools"
+        "place . map"
+        ". . ."
+        "joy prompt .";
+      transition: opacity .2s;
+    }
+    #hud > * { pointer-events: auto; }
+    #hud.dimmed { opacity: .35; pointer-events: none; }
+    #hud.dimmed > * { pointer-events: none; }
+
+    #place-card { grid-area: place; align-self: start; background: var(--paper-a); border-radius: 16px; padding: 12px 14px; box-shadow: 0 6px 20px #0002; border-top: 6px solid var(--zone, var(--accent)); }
+    #place-card .title { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: .08em; color: var(--accent); }
+    #place { margin: 2px 0 2px; font-size: 20px; font-weight: 800; color: var(--zone, var(--accent)); }
+    #goal { margin: 0 0 8px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+    .progress { display: flex; gap: 6px; flex-wrap: wrap; margin: 0; padding: 0; list-style: none; }
+    .progress li { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 3px 10px 3px 4px; background: #eef2f6; }
+    .progress li i { width: 18px; height: 18px; border-radius: 50%; background: var(--c); display: grid; place-items: center; color: #fff; font-style: normal; font-size: 11px; }
+    .progress li b { font-variant-numeric: tabular-nums; }
+    .progress li.done { background: #fff4c7; }
+    #badge { margin-top: 8px; display: inline-block; font-size: 12px; font-weight: 800; background: var(--sun); border-radius: 999px; padding: 3px 10px; }
+
+    .tools { grid-area: tools; justify-self: end; align-self: start; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 560px; }
+    #minimap { grid-area: map; justify-self: end; align-self: start; width: 170px; height: 170px; border-radius: 50%; border: 4px solid #fff; box-shadow: 0 4px 16px #0003; }
+
+    #prompt { grid-area: prompt; justify-self: center; align-self: end; display: flex; align-items: center; gap: 10px; background: #e0322a; color: #fff; border: 3px solid #fff; padding: 12px 20px; font-size: 16px; box-shadow: 0 6px 18px #0004; max-width: 100%; }
+    #prompt span { overflow: hidden; text-overflow: ellipsis; font-weight: 700; opacity: .95; }
+    #prompt b { background: #fff; color: #e0322a; border-radius: 999px; padding: 2px 10px; flex: none; }
+
+    #joystick { grid-area: joy; align-self: end; position: relative; width: 120px; height: 120px; border-radius: 50%; background: #1d273333; border: 3px solid #ffffffd0; touch-action: none; }
+    #joystick span { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: #fff; box-shadow: 0 2px 8px #0004; pointer-events: none; }
+
+    /* dialog */
+    #dialog { position: fixed; inset: 0; display: grid; place-items: center; padding: calc(16px + var(--st)) calc(16px + var(--sr)) calc(16px + var(--sb)) calc(16px + var(--sl)); background: #1d273366; z-index: 10; }
+    .card { position: relative; width: min(600px, 100%); max-height: 100%; overflow-y: auto; background: var(--paper); border-radius: 20px; box-shadow: 0 16px 48px #0005; border-top: 10px solid var(--zone); padding: 20px 22px 18px; -webkit-user-select: text; user-select: text; }
+    #dialog-close { position: absolute; top: 10px; right: 10px; border: none; background: #eef2f6; width: 40px; height: 40px; padding: 0; font-size: 20px; }
+    .eyebrow { margin: 0; font-size: 13px; font-weight: 800; color: var(--zone); letter-spacing: .06em; }
+    .card h2 { margin: 4px 44px 12px 0; font-size: 22px; line-height: 1.35; text-wrap: balance; }
+    .lead { font-size: 16px; line-height: 1.8; margin: 0 0 12px; }
+    .small { font-size: 13px; line-height: 1.7; color: var(--muted); margin: 0 0 10px; }
+    .situation { background: #f2f5f8; border-radius: 14px; padding: 12px 14px; margin: 0 0 12px; }
+    .situation p { margin: 6px 0 0; font-size: 15px; line-height: 1.8; }
+    .situation.warn { background: #fdeceb; }
+    .situation.good { background: #e6f4ec; }
+    .tag { display: inline-block; font-size: 12px; font-weight: 800; color: #fff; background: var(--zone); border-radius: 999px; padding: 2px 10px; }
+    .situation.warn .tag { background: var(--ng); }
+    .situation.good .tag { background: var(--ok); }
+    .question { font-size: 17px; font-weight: 800; line-height: 1.6; margin: 4px 0 10px; }
+    .choices { display: grid; gap: 10px; }
+    .choice { white-space: normal; text-align: left; border-radius: 14px; padding: 14px 16px; font-size: 15px; line-height: 1.6; background: #fff; border: 2px solid var(--zone); }
+    .choice:hover { background: #f6f8fb; }
+    .verdict { font-size: 26px; font-weight: 800; margin: 6px 0 8px; display: flex; align-items: center; gap: 10px; }
+    .verdict span { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 26px; }
+    .verdict.ok { color: var(--ok); } .verdict.ok span { background: var(--ok); }
+    .verdict.ng { color: var(--ng); } .verdict.ng span { background: var(--ng); }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+    .actions button { padding: 12px 20px; font-size: 15px; }
+    .items { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .item { white-space: normal; border-radius: 12px; padding: 10px; font-size: 13px; min-height: 52px; background: #fff; }
+    .item[aria-pressed="true"] { background: var(--zone); color: #fff; border-color: transparent; }
+    .item[aria-pressed="true"]::before { content: "✓ "; }
+    .feedback { min-height: 1.5em; font-size: 14px; line-height: 1.6; margin: 10px 0 0; }
+    .feedback.ng { color: var(--ng); font-weight: 700; }
+    .steps { margin: 0 0 12px; padding-left: 1.4em; line-height: 1.9; font-size: 15px; }
+    .mk { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #e0322a; color: #fff; font-weight: 800; }
+    .opt-row { display: grid; grid-template-columns: 7.5em 1fr; gap: 8px; align-items: center; margin: 0 0 10px; }
+    .opt-row > span { font-size: 13px; font-weight: 700; color: var(--muted); }
+    .opt-row > div { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { padding: 7px 12px; font-size: 13px; }
+    .chip[aria-pressed="true"] { background: var(--accent); color: #fff; border-color: transparent; }
+    .chip.swatch { width: 34px; height: 34px; padding: 0; background: var(--sw); }
+    .chip.swatch[aria-pressed="true"] { outline: 3px solid var(--accent); outline-offset: 2px; background: var(--sw); }
+    .stamps { list-style: none; margin: 0; padding: 0; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+    .stamps li { display: grid; justify-items: center; gap: 4px; text-align: center; font-size: 13px; font-weight: 700; width: 140px; }
+    .stamps small { display: block; color: var(--muted); font-weight: 400; }
+    .stamp { width: 80px; height: 80px; }
+    .stamp-big { display: grid; justify-items: center; gap: 4px; margin: 6px 0 10px; font-size: 18px; font-weight: 800; }
+    .stamp-big .stamp { width: 120px; height: 120px; }
+    #loading { position: fixed; inset: 0; display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 18px; font-weight: 800; letter-spacing: .1em; z-index: 20; }
+    /* avatar editor: keep the avatar visible beside / above the panel */
+    #dialog[data-mode="side"] { background: transparent; place-items: center end; }
+    #dialog[data-mode="side"] .card { width: min(440px, 100%); }
+    [hidden] { display: none !important; }
+
+    @media (max-width: 720px) {
+      :root { --gap: 8px; }
+      #hud {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+        grid-template-areas: "place map" "tools tools" ". ." "prompt prompt" "joy joy";
+      }
+      #place-card { padding: 8px 12px; border-radius: 12px; }
+      #place { font-size: 16px; }
+      #goal { display: none; }
+      .progress li { font-size: 11px; padding: 2px 8px 2px 3px; }
+      #minimap { width: 92px; height: 92px; border-width: 3px; }
+      .tools { justify-self: stretch; max-width: none; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+      .tools::-webkit-scrollbar { display: none; }
+      .tools button { flex: none; font-size: 13px; padding: 8px 12px; }
+      #prompt { justify-self: stretch; justify-content: center; font-size: 15px; }
+      #joystick { justify-self: start; width: 112px; height: 112px; }
+      #dialog { place-items: end center; padding: 0; }
+      .card { border-radius: 20px 20px 0 0; max-height: 86%; padding: 18px 16px calc(16px + var(--sb)); }
+      .card h2 { font-size: 19px; }
+      .lead, .situation p { font-size: 15px; }
+      .opt-row { grid-template-columns: 1fr; gap: 4px; }
+      #dialog[data-mode="side"] { place-items: end center; }
+      #dialog[data-mode="side"] .card { width: 100%; max-height: 52%; }
+    }
+    @media (max-height: 500px) and (orientation: landscape) {
+      #hud {
+        grid-template-columns: minmax(0, 300px) 1fr auto;
+        grid-template-rows: auto minmax(0, 1fr) auto;
+        grid-template-areas: "place tools map" ". . ." "joy prompt .";
+      }
+      #goal { display: none; }
+      #minimap { width: 84px; height: 84px; }
+      .tools { max-width: none; }
+      .tools button { padding: 7px 10px; font-size: 12px; }
+      #joystick { width: 100px; height: 100px; }
+      .card { max-height: 96%; }
+    }
+    @media (prefers-reduced-motion: reduce) { #hud { transition: none; } }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "../vendor/three/three.module.js" } }
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="hud">
+    <section id="place-card" aria-live="polite">
+      <p class="title">ワンヘルス・クエスト（仮称）</p>
+      <p id="place">エントランス広場</p>
+      <p id="goal">3つのテーマエリアをめぐって、トラブルを解決しよう</p>
+      <ul class="progress" aria-label="エリアの進み具合">
+        <li id="prog-A" style="--c:#2f8f5b"><i>A</i>理念 <b>0/5</b></li>
+        <li id="prog-B" style="--c:#c46a1b"><i>B</i>感染症 <b>0/5</b></li>
+        <li id="prog-C" style="--c:#2b63b5"><i>C</i>災害 <b>0/5</b></li>
+      </ul>
+      <span id="badge" hidden>ワンヘルスマスター</span>
+    </section>
+
+    <nav class="tools" aria-label="メニュー">
+      <button id="btn-hub">エントランスへ</button>
+      <button id="btn-view">視点：三人称</button>
+      <button id="btn-avatar">アバター</button>
+      <button id="btn-stamps">スタンプ台紙</button>
+      <button id="btn-sound" aria-pressed="true">音：オン</button>
+      <button id="btn-help">あそびかた</button>
+    </nav>
+
+    <canvas id="minimap" width="340" height="340" aria-label="全体マップ（赤い点がトラブル、青い点がTips）"></canvas>
+
+    <button id="prompt" hidden><b>調べる</b><span></span></button>
+    <div id="joystick" hidden aria-label="移動スティック"><span></span></div>
+  </div>
+
+  <ul id="stamps" class="stamps" hidden></ul>
+
+  <div id="dialog" hidden role="dialog" aria-modal="true" aria-live="polite">
+    <div class="card">
+      <button id="dialog-close" aria-label="閉じる">×</button>
+      <div id="dialog-body"></div>
+    </div>
+  </div>
+
+  <div id="loading">LOADING…</div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
