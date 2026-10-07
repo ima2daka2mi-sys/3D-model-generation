@@ -303,6 +303,55 @@ function tube(points, r, color) {
   return part(new THREE.TubeGeometry(curve, 20, r, 8, false), color, 0.7);
 }
 
+
+/**
+ * One smooth body mesh swept along a spine (torso + neck in a single piece,
+ * no seams). pts: [[x,y,z, rx, ry], ...] with per-point half width / height.
+ * colorAt(p, n) returns a THREE.Color for vertex colouring (markings).
+ */
+function blob(pts, colorAt, segs = 40, radial = 20) {
+  const curve = new THREE.CatmullRomCurve3(pts.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
+  const radii = (t) => {
+    const f = t * (pts.length - 1), i = Math.min(pts.length - 2, Math.floor(f)), k = f - i;
+    const e = k * k * (3 - 2 * k);
+    return [pts[i][3] + (pts[i + 1][3] - pts[i][3]) * e, pts[i][4] + (pts[i + 1][4] - pts[i][4]) * e];
+  };
+  const frames = curve.computeFrenetFrames(segs, false);
+  const pos = [], col = [], idx = [];
+  const up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), n = new THREE.Vector3(), c = new THREE.Color();
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    const p = curve.getPointAt(t);
+    const T = curve.getTangentAt(t);
+    // side axis stays horizontal so the body never twists
+    const side = new THREE.Vector3().crossVectors(up, T).normalize();
+    const vert = new THREE.Vector3().crossVectors(T, side).normalize();
+    // round the ends into caps
+    const cap = Math.sin(Math.min(1, Math.min(t, 1 - t) / 0.12) * Math.PI / 2);
+    const [rx, ry] = radii(t).map((r) => r * (0.25 + 0.75 * cap));
+    for (let j = 0; j <= radial; j++) {
+      const a = (j / radial) * Math.PI * 2;
+      n.copy(side).multiplyScalar(Math.cos(a) / rx).addScaledVector(vert, Math.sin(a) / ry).normalize();
+      v.copy(p).addScaledVector(side, Math.cos(a) * rx).addScaledVector(vert, Math.sin(a) * ry);
+      pos.push(v.x, v.y, v.z);
+      (colorAt ? colorAt(v, n, t) : c.set(0xffffff)).toArray(col, col.length);
+    }
+  }
+  for (let i = 0; i < segs; i++) for (let j = 0; j < radial; j++) {
+    const a = i * (radial + 1) + j, b = a + radial + 1;
+    idx.push(a, a + 1, b, b, a + 1, b + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75 }));
+  m.castShadow = m.receiveShadow = true;
+  m.userData.curve = curve;
+  return m;
+}
+
 /**
  * Dog, faces +Z, ~0.75 m long.
  * kind: 'shiba' | 'beagle'; lying: resting / sick pose; collar: red collar with ID tag.
@@ -313,19 +362,29 @@ export function dog({ kind = 'shiba', lying = false, collar = true } = {}) {
   const body = new THREE.Group();
   root.add(body);
 
-  // torso
-  const torso = place(capsule(0.15, 0.3, C.main, 0.75), 0, 0.45, -0.02, Math.PI / 2, 0, 0, [1, 1, 1.06]);
-  body.add(torso);
-  body.add(place(sphere(0.13, C.light), 0, 0.4, 0.13, 0, 0, 0, [0.95, 1.02, 1.15])); // chest
-  body.add(place(sphere(0.12, C.light), 0, 0.35, -0.08, 0, 0, 0, [0.9, 0.55, 1.6])); // belly
-  if (kind === 'beagle') body.add(place(sphere(0.155, C.dark), 0, 0.53, -0.06, 0, 0, 0, [1.04, 0.55, 1.45])); // saddle
-  // neck
-  body.add(place(capsule(0.085, 0.12, C.main), 0, 0.6, 0.22, -0.65, 0, 0));
-  body.add(place(sphere(0.08, C.light), 0, 0.55, 0.27, 0, 0, 0, [0.9, 1.1, 0.8]));
+  // torso + neck as ONE seamless mesh; markings via vertex colours
+  const headPos = lying ? new THREE.Vector3(0, 0.58, 0.4) : new THREE.Vector3(0, 0.73, 0.31);
+  const cMain = new THREE.Color(C.main), cLight = new THREE.Color(C.light), cDark = new THREE.Color(C.dark), tmp = new THREE.Color();
+  const trunk = blob([
+    [0, 0.47, -0.33, 0.1, 0.1],
+    [0, 0.46, -0.22, 0.14, 0.14],
+    [0, 0.45, -0.02, 0.15, 0.15],
+    [0, 0.46, 0.14, 0.145, 0.155],
+    [0, headPos.y - 0.13, headPos.z - 0.1, 0.095, 0.1],
+    [0, headPos.y - 0.04, headPos.z - 0.02, 0.085, 0.085],
+  ], (p, n, t) => {
+    // light underside / chest (shiba "urajiro", beagle white belly)
+    const under = THREE.MathUtils.smoothstep(-n.y + (p.z > 0.05 ? n.z * 0.9 : 0), 0.15, 0.5);
+    tmp.copy(cMain).lerp(cLight, under);
+    // beagle black saddle on the back
+    if (kind === 'beagle') tmp.lerp(cDark, THREE.MathUtils.smoothstep(n.y, 0.35, 0.6) * (p.z < 0.12 && p.z > -0.3 ? 1 : 0));
+    return tmp.clone();
+  });
+  body.add(trunk);
 
   // head
   const head = new THREE.Group();
-  head.position.set(0, 0.73, 0.31);
+  head.position.copy(headPos);
   head.add(place(sphere(0.12, C.main, 20, 16), 0, 0, 0, 0, 0, 0, [1, 0.92, 1.05]));
   if (kind === 'shiba') {
     // urajiro: white cheeks + muzzle underside
@@ -353,17 +412,27 @@ export function dog({ kind = 'shiba', lying = false, collar = true } = {}) {
     }
   }
   if (collar) {
-    body.add(place(part(new THREE.TorusGeometry(0.088, 0.016, 8, 24), 0xc8283a, 0.5), 0, 0.6, 0.235, Math.PI / 2 - 0.65, 0, 0));
-    body.add(place(part(new THREE.CylinderGeometry(0.022, 0.022, 0.006, 14), 0xe6b422, 0.3, { metalness: 0.7 }), 0, 0.53, 0.305, Math.PI / 2 - 0.3, 0, 0));
+    // collar hugs the neck: placed on the spine and aligned with it
+    const cv = trunk.userData.curve, ct = 0.78;
+    const cp = cv.getPointAt(ct), tg = cv.getTangentAt(ct);
+    const ring = part(new THREE.TorusGeometry(0.098, 0.016, 8, 28), 0xc8283a, 0.5);
+    ring.position.copy(cp);
+    ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tg);
+    body.add(ring);
+    const tag = part(new THREE.CylinderGeometry(0.022, 0.022, 0.006, 14), 0xe6b422, 0.3, { metalness: 0.7 });
+    tag.position.copy(cp).add(new THREE.Vector3(0, -0.1, 0.04));
+    tag.rotation.x = Math.PI / 2 - 0.3;
+    body.add(tag);
   }
   body.add(head);
 
   // legs: shoulder/hip → lower leg → paw
   const legs = [];
-  for (const [x, z, front] of [[-0.085, 0.15, true], [0.085, 0.15, true], [-0.09, -0.2, false], [0.09, -0.2, false]]) {
+  for (const [x, z, front] of [[-0.075, 0.15, true], [0.075, 0.15, true], [-0.08, -0.2, false], [0.08, -0.2, false]]) {
     const top = new THREE.Group();
     top.position.set(x, 0.43, z);
-    top.add(place(capsule(front ? 0.045 : 0.058, 0.12, C.main), 0, -0.08, front ? 0 : -0.01));
+    // upper leg starts inside the body so it grows out of it without a bump
+    top.add(place(capsule(front ? 0.04 : 0.048, 0.14, front ? C.light : C.main), 0, -0.09, 0));
     const low = new THREE.Group();
     low.position.y = -0.18;
     low.add(place(capsule(0.036, 0.13, C.light), 0, -0.08, 0));
@@ -392,7 +461,6 @@ export function dog({ kind = 'shiba', lying = false, collar = true } = {}) {
       if (front) { top.rotation.x = -1.45; low.rotation.x = 0.1; top.position.y = 0.43; }
       else { top.rotation.z = (i === 2 ? -1 : 1) * 1.2; top.rotation.x = -0.5; }
     });
-    head.position.set(0, 0.58, 0.4);
     head.rotation.x = 0.25;
     tail.rotation.x = 1.4;
   }
@@ -575,4 +643,96 @@ export function cow() {
   root.add(tail);
   root.userData = { head, tail };
   return root;
+}
+
+/* ------------------------------------------------------------------ */
+/* Rabbit & birds                                                       */
+/* ------------------------------------------------------------------ */
+
+const RABBITS = { white: [0xfbf8f4, 0xf6b8c0], brown: [0xb08060, 0xf0c8c0], grey: [0x9a9ea6, 0xf0c0c6] };
+
+/** Round, fluffy rabbit (~0.35 m), faces +Z. */
+export function rabbit({ coat = 'white' } = {}) {
+  const [fur, inner] = RABBITS[coat] || RABBITS.white;
+  const belly = shade(fur, 1.15);
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  root.add(body);
+  body.add(place(sphere(0.13, fur, 20, 16), 0, 0.14, -0.02, 0, 0, 0, [1, 0.95, 1.2]));
+  body.add(place(sphere(0.08, belly, 14, 10), 0, 0.12, 0.08, 0, 0, 0, [1, 1.1, 0.8]));
+  for (const s of [-1, 1]) {
+    body.add(place(sphere(0.06, fur, 12, 10), s * 0.085, 0.07, -0.06, 0, 0, 0, [0.8, 0.9, 1.3])); // haunches
+    body.add(place(sphere(0.032, fur, 10, 8), s * 0.06, 0.025, 0.1, 0, 0, 0, [1, 0.7, 1.4])); // front paws
+  }
+  body.add(place(sphere(0.045, 0xffffff, 12, 10), 0, 0.16, -0.17)); // cotton tail
+  const head = new THREE.Group();
+  head.position.set(0, 0.27, 0.1);
+  head.add(place(sphere(0.095, fur, 20, 16), 0, 0, 0, 0, 0, 0, [1.05, 0.95, 1]));
+  for (const s of [-1, 1]) {
+    head.add(place(sphere(0.035, belly, 10, 8), s * 0.03, -0.035, 0.07)); // cheeks
+    head.add(place(eye(0.026, 0x3a2418), s * 0.052, 0.015, 0.072, 0, s * 0.4, 0));
+    const ear = new THREE.Group();
+    ear.add(place(capsule(0.032, 0.12, fur), 0, 0.08, 0, 0, 0, 0, [1, 1, 0.55]));
+    ear.add(place(capsule(0.018, 0.1, inner), 0, 0.08, 0.012, 0, 0, 0, [1, 1, 0.3]));
+    ear.position.set(s * 0.035, 0.07, -0.01);
+    ear.rotation.set(-0.2, 0, -s * 0.2);
+    head.add(ear);
+  }
+  head.add(place(sphere(0.012, 0xf08a9a, 8, 6), 0, -0.015, 0.093));
+  root.add(head);
+  root.userData = { head, body, kind: 'rabbit' };
+  return root;
+}
+
+/** Hopping animation; returns the hop height so callers can move the rabbit. */
+export function animateRabbit(r, t, hopping, phase = t * 5) {
+  const { body, head } = r.userData;
+  const h = hopping ? Math.max(0, Math.sin(phase)) : 0;
+  r.children[0].position.y = h * 0.12;
+  head.position.y = 0.27 + h * 0.12;
+  body.rotation.x = hopping ? -Math.cos(phase) * 0.15 : 0;
+  head.rotation.x = hopping ? 0 : Math.sin(t * 6) * 0.03; // nose twitch
+  return h;
+}
+
+const BIRDS = { sparrow: [0x9a6a44, 0xf2e6d6, 0x5a3a24], bluebird: [0x3f8fe0, 0xf5efe2, 0x2a5aa8], robin: [0x6a5a50, 0xf08040, 0x3a302a] };
+
+/** Small round songbird (~0.15 m), faces +Z. */
+export function bird({ kind = 'sparrow' } = {}) {
+  const [back, chest, wing] = BIRDS[kind] || BIRDS.sparrow;
+  const root = new THREE.Group();
+  const body = new THREE.Group();
+  root.add(body);
+  body.add(place(sphere(0.06, back, 16, 12), 0, 0.07, 0, 0, 0, 0, [0.95, 0.9, 1.15]));
+  body.add(place(sphere(0.045, chest, 12, 10), 0, 0.055, 0.025, 0, 0, 0, [1, 1, 0.9]));
+  const head = new THREE.Group();
+  head.position.set(0, 0.125, 0.04);
+  head.add(sphere(0.042, back, 14, 12));
+  head.add(place(part(new THREE.ConeGeometry(0.012, 0.03, 8), 0xf0b030, 0.5), 0, -0.005, 0.048, Math.PI / 2, 0, 0));
+  for (const s of [-1, 1]) head.add(place(eye(0.011, 0x111111), s * 0.025, 0.008, 0.03, 0, s * 0.6, 0));
+  body.add(head);
+  const wings = [];
+  for (const s of [-1, 1]) {
+    const w = new THREE.Group();
+    w.position.set(s * 0.05, 0.085, 0);
+    w.add(place(sphere(0.045, wing, 12, 8), s * 0.02, -0.01, -0.01, 0, 0, 0, [0.35, 0.8, 1.3]));
+    body.add(w);
+    wings.push({ w, s });
+  }
+  body.add(place(part(new THREE.BoxGeometry(0.04, 0.008, 0.06), wing), 0, 0.075, -0.08, 0.4, 0, 0)); // tail
+  for (const s of [-1, 1]) body.add(place(part(new THREE.CylinderGeometry(0.004, 0.004, 0.03, 5), 0xd09040), s * 0.018, 0.012, 0.005));
+  root.scale.setScalar(1.4); // a bit larger than life so they read on a phone screen
+  root.userData = { head, body, wings, kind: 'bird' };
+  return root;
+}
+
+/** flying: flap wings; otherwise hop-peck on the ground. */
+export function animateBird(b, t, flying, seed = 0) {
+  const { head, body, wings } = b.userData;
+  const f = flying ? Math.sin(t * 22 + seed) * 1.1 : 0;
+  for (const { w, s } of wings) w.rotation.z = s * (0.15 + f);
+  if (flying) { head.rotation.x = 0; body.position.y = 0; return; }
+  const k = (t * 1.3 + seed) % 3;
+  head.rotation.x = k < 0.4 ? Math.sin(k / 0.4 * Math.PI) * 0.9 : 0; // peck
+  body.position.y = k > 1.5 && k < 1.8 ? Math.sin((k - 1.5) / 0.3 * Math.PI) * 0.03 : 0; // little hop
 }

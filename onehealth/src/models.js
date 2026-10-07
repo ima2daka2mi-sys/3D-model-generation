@@ -1,7 +1,7 @@
 // Low-poly procedural models in the proposal's illustration style:
 // animals, the customizable avatar, buildings, furniture and props.
 import * as THREE from 'three';
-export { dog, animateDog, cat, fox, cow, avatar, animateAvatar, AVATAR_OPTIONS, DEFAULT_LOOK } from './characters.js';
+export { dog, animateDog, cat, fox, cow, rabbit, animateRabbit, bird, animateBird, avatar, animateAvatar, AVATAR_OPTIONS, DEFAULT_LOOK } from './characters.js';
 
 const cache = new Map();
 /** Flat-shaded material, cached by colour. */

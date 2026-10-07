@@ -371,11 +371,67 @@ export function buildWorld(scene) {
     forest.tree(x, z, 0.8 + ((k * 7) % 5) * 0.12, k % 4 === 0 ? 'pine' : 'round');
   }
 
+  // plaza wildlife: a rabbit hopping around the planter, sparrows and a flock overhead
+  hopAround(W, scene, 'white', 0, 0, 6.6, 0.3, 1.0);
+  peckers(W, scene, [[-6.5, 4.5, 0.5], [-7.2, 5.1, 2.2], [6.8, -4.2, -1], [7.4, -3.4, 2.8]], ['sparrow', 'sparrow', 'bluebird']);
+  flock(W, scene, 0, 0, 12, 9, 6, ['sparrow', 'bluebird', 'robin']);
+
   const trees = forest.build(7);
   trees.name = 'Vegetation';
   scene.add(trees);
   W.occluders = trees.children; // used to keep the camera in front of trees
   return W;
+}
+
+
+/* ---------------- small wildlife & pets ---------------- */
+
+/** Rabbit hopping around a circle (cx, cz, r) in its parent's space. */
+function hopAround(W, parent, coat, cx, cz, r, speed = 0.35, phase = 0) {
+  const rb = M.rabbit({ coat });
+  parent.add(rb);
+  let a = phase;
+  W.animals.push((t, dt) => {
+    // hop for a while, then sit and twitch the nose
+    const cycle = (t * 0.25 + phase) % 1;
+    const hopping = cycle < 0.6;
+    if (hopping) a += dt * speed;
+    rb.position.set(cx + Math.cos(a) * r, 0, cz + Math.sin(a) * r);
+    rb.rotation.y = -a + (speed > 0 ? 0 : Math.PI);
+    M.animateRabbit(rb, t, hopping, t * 9 + phase);
+  });
+  return rb;
+}
+
+/** Birds pecking on the ground; they flutter up briefly now and then. */
+function peckers(W, parent, spots, kind = 'sparrow') {
+  spots.forEach(([x, z, ry], i) => {
+    const b = M.bird({ kind: Array.isArray(kind) ? kind[i % kind.length] : kind });
+    b.position.set(x, 0, z);
+    b.rotation.y = ry;
+    parent.add(b);
+    W.animals.push((t) => {
+      const k = (t * 0.12 + i * 0.37) % 1;
+      const fly = k > 0.93;
+      b.position.y = fly ? Math.sin((k - 0.93) / 0.07 * Math.PI) * 0.6 : 0;
+      M.animateBird(b, t, fly, i * 2.1);
+    });
+  });
+}
+
+/** A small flock circling in the sky. */
+function flock(W, parent, cx, cz, r, y, n = 5, kind = 'sparrow') {
+  for (let i = 0; i < n; i++) {
+    const b = M.bird({ kind: Array.isArray(kind) ? kind[i % kind.length] : kind });
+    parent.add(b);
+    const off = (i / n) * 0.9, rr = r + (i % 2) * 1.2, yy = y + (i % 3) * 0.6;
+    W.animals.push((t) => {
+      const a = t * 0.35 + off;
+      b.position.set(cx + Math.cos(a) * rr, yy + Math.sin(t * 1.5 + i) * 0.3, cz + Math.sin(a) * rr);
+      b.rotation.set(0, -a, -0.35);
+      M.animateBird(b, t, true, i);
+    });
+  }
 }
 
 /* ---------------- zone kit: local-space placement helpers ---------------- */
@@ -559,6 +615,11 @@ function buildZoneA(Z, W) {
   Z.mark('A1', 15.2, -9.6, 2.2);
   W.anchors.forestDamage = Z.toWorld(15.2, -9.6);
   W.anchors.parkWorld = Z.toWorld(4, 6);
+  // wild rabbits in the meadow, birds by the river, a flock over the forest
+  hopAround(W, Z.g, 'brown', 3.5, -11, 2.2, 0.4, 0.3);
+  hopAround(W, Z.g, 'grey', 4.5, -14.5, 1.4, -0.35, 2.1);
+  peckers(W, Z.g, [[6.8, 2, 1.2], [6.5, 1.2, -0.4], [7, -7, 2.5]], ['robin', 'sparrow']);
+  flock(W, Z.g, 16, -2, 5, 8, 5, ['bluebird', 'sparrow']);
 
   // trees on the town side
   for (const [x, z] of [[-15, 15], [-7, 15], [-7, 3.5], [-15.5, 3], [-21, -10], [-20, -16]]) Z.tree(x, z, 0.9);
@@ -690,6 +751,8 @@ function buildZoneC(Z, W) {
   W.animals.push((t) => M.animateDog(lazy, t, false));
   Z.put(M.cage(), hx + 4.3, hz - 4.9);
   Z.solid(hx + 4.3, hz - 4.9, 0.55, 0.4);
+  // pet rabbit hopping in the living room
+  hopAround(W, Z.g, 'white', hx + 2.6, hz - 2.6, 0.9, 0.5, 0.7);
   // C1 pet food
   Z.put(M.foodBag(), hx - 4.2, hz + 3.6);
   Z.mark('C1', hx - 4, hz + 3.6, 1.7);
